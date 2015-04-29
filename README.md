@@ -1,6 +1,6 @@
 # middleware-utils [![NPM version](https://badge.fury.io/js/middleware-utils.svg)](http://badge.fury.io/js/middleware-utils)
 
-> Utils for middleware.
+> Utils for Template middleware.
 
 ## Install with [npm](npmjs.org)
 
