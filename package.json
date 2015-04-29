@@ -40,13 +40,17 @@
   },
   "keywords": [
     "assemble",
+    "assembleutils",
     "async",
     "generate",
     "middleware",
     "route",
     "routes",
     "template",
+    "templateutils",
     "update",
-    "verb"
+    "utils",
+    "verb",
+    "verbutils"
   ]
 }
