@@ -77,7 +77,7 @@ exports.error = function error(methodName) {
     throw new Error('middleware-utils.error() expects `methodName` to be a string.');
   }
   return function (err, file, next) {
-    if (err) console.log(chalk.red('.%s middleware error: %j'), methodName, err);
+    if (err) console.log(chalk.red('.%s middleware error: %s\nFile: %j:'), methodName, err, file);
     next();
   };
 };
