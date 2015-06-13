@@ -77,7 +77,8 @@ exports.error = function error(methodName) {
     throw new Error('middleware-utils.error() expects `methodName` to be a string.');
   }
   return function (err, file, next) {
-    if (err) console.log(chalk.red('.%s middleware error: %s\nFile: %j:'), methodName, err, file);
+    var message = yellow('.%s middleware error:\n%s\nFile: %s:');
+    if (err) console.error(message, methodName, err, JSON.stringify(file, null, 2));
     next();
   };
 };
@@ -100,8 +101,8 @@ exports.handleError = function handleError(file, methodName) {
   }
   return function (err) {
     if (err) {
-      console.log(chalk.red('Error running `' + methodName + '` middleware for:'), file.path);
-      console.log(chalk.red(err));
+      console.error(red('Error running `' + methodName + '` middleware for:'), file.path);
+      throw err;
     }
   };
 };
@@ -129,7 +130,6 @@ exports.delims = function delims(options) {
   // unscape
   res.unescape = function unescape(to) {
     to = to || options.to;
-
     return function(file, next) {
       file.content = file.content.split(options.escapeString).join(to);
       next();
