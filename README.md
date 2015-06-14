@@ -18,7 +18,7 @@ var utils = require('middleware-utils');
 
 ## API
 
-### [.series](index.js#L29)
+### [.series](index.js#L30)
 
 Run middleware in series
 
@@ -38,7 +38,7 @@ template.onLoad(/\.js$/, utils.series([
 ]));
 ```
 
-### [.parallel](index.js#L53)
+### [.parallel](index.js#L54)
 
 Run middleware in parallel.
 
@@ -58,7 +58,7 @@ template.onLoad(/\.js$/, utils.parallel([
 ]));
 ```
 
-### [.error](index.js#L75)
+### [.error](index.js#L76)
 
 Output a formatted middleware error.
 
@@ -75,7 +75,7 @@ template.postRender(/./, function (file, next) {
 }, utils.error('postRender'));
 ```
 
-### [.handleError](index.js#L98)
+### [.handleError](index.js#L99)
 
 Handle middleware errors for the `.handle()` method.
 

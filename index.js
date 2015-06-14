@@ -8,7 +8,8 @@
 'use strict';
 
 var async = require('async');
-var chalk = require('chalk');
+var red = require('ansi-red');
+var yellow = require('ansi-yellow');
 
 /**
  * Run middleware in series
