@@ -7,134 +7,184 @@
 
 'use strict';
 
-var async = require('async');
-var red = require('ansi-red');
-var yellow = require('ansi-yellow');
+var each = require('async-each');
+var eachSeries = require('async-each-series');
 
 /**
- * Run middleware in series
+ * Run one or more middleware in series.
  *
  * ```js
- * var middleware = require('./middleware/');
- *
- * template.onLoad(/\.js$/, utils.series([
- *   middleware.foo,
- *   middleware.bar,
- *   middleware.baz,
+ * var utils = require('middleware-utils');
+
+ * app.preRender(/\.hbs$/, utils.series([
+ *   fn('foo'),
+ *   fn('bar'),
+ *   fn('baz')
  * ]));
+ *
+ * function fn(name) {
+ *   return function(file, next) {
+ *     console.log(name);
+ *     next();
+ *   };
+ * }
  * ```
- * @param {Array} `fns` Array of middleware functions
+ * @param {Array|Function} `fns` Function or array of middleware functions
  * @api public
  */
 
-exports.series = function series(fns) {
-  return function (file, cb) {
-    async.eachSeries(fns, function (fn, next) {
-      fn(file, next);
+exports.series = function(fns) {
+  fns = arrayify.apply(null, arguments);
+  return function(view, cb) {
+    eachSeries(fns, function(fn, next) {
+      try {
+        fn(view, next);
+      } catch (err) {
+        next(err);
+      }
     }, cb);
   };
 };
 
 /**
- * Run middleware in parallel.
+ * Run one or more middleware in parallel.
  *
  * ```js
- * var middleware = require('./middleware/');
- *
- * template.onLoad(/\.js$/, utils.parallel([
- *   middleware.foo,
- *   middleware.bar,
- *   middleware.baz,
+ * var utils = require('middleware-utils');
+
+ * app.preRender(/\.hbs$/, utils.parallel([
+ *   fn('foo'),
+ *   fn('bar'),
+ *   fn('baz')
  * ]));
+ *
+ * function fn(name) {
+ *   return function(file, next) {
+ *     console.log(name);
+ *     next();
+ *   };
+ * }
  * ```
- * @param {Array} `fns` Array of middleware functions
+ * @param {Array|Function} `fns` Function or array of middleware functions
  * @api public
  */
 
-exports.parallel = function parallel(fns) {
-  return function (file, cb) {
-    async.each(fns, function (fn, next) {
-      fn(file, next);
+exports.parallel = function(fns) {
+  fns = arrayify.apply(null, arguments);
+  return function(file, cb) {
+    each(fns, function(fn, next) {
+      try {
+        fn(file, next);
+      } catch (err) {
+        next(err);
+      }
     }, cb);
   };
 };
 
 /**
- * Output a formatted middleware error.
+ * Format errors for the middleware `done` function. Takes the name of the middleware method
+ * being handled.
  *
  * ```js
- * template.postRender(/./, function (file, next) {
- *   // do stuff to file
+ * app.postRender(/./, function(view, next) {
+ *   // do stuff to view
  *   next();
  * }, utils.error('postRender'));
  * ```
  *
- * @param {String} `methodName` The middleware method name (verb)
+ * @param {String} `method` The middleware method name
  * @api public
  */
 
-exports.error = function error(methodName) {
-  if (typeof methodName !== 'string') {
-    throw new Error('middleware-utils.error() expects `methodName` to be a string.');
-  }
-  return function (err, file, next) {
-    var message = yellow('.%s middleware error:\n%s\nFile: %s:');
-    if (err) console.error(message, methodName, err, JSON.stringify(file, null, 2));
+exports.error = function(method) {
+  return function(err, view, next) {
+    next = next || function() {
+      if (err) throw err;
+    };
+
+    if (err) {
+      err.method = method;
+      err.view = view;
+      next(err);
+      return;
+    }
     next();
   };
 };
 
 /**
- * Handle middleware errors for the `.handle()` method.
+ * Format errors for the `app.handle()` method.
  *
  * ```js
- * template.handle('onFoo', file, utils.handleError(file, 'onFoo'));
+ * app.handle('onFoo', view, utils.handleError(view, 'onFoo'));
  * ```
  *
- * @param {Object} `file` Vinyl file object or template object.
- * @param {String} `methodName` The middleware method name (verb)
+ * @param {Object} `view` View object
+ * @param {String} `method` The middleware method name
+ * @param {String} `next` Callback function
  * @api public
  */
 
-exports.handleError = function handleError(file, methodName) {
-  if (typeof methodName !== 'string') {
-    throw new Error('middleware-utils.handleError() expects `methodName` to be a string.');
-  }
-  return function (err) {
+exports.handleError = function(view, method, next) {
+  return function(err) {
+    next = next || function() {
+      if (err) throw err;
+    };
+
     if (err) {
-      console.error(red('Error running `' + methodName + '` middleware for:'), file.path);
-      throw err;
+      err.method = method;
+      err.view = view;
+      next(err);
+      return;
     }
+    next();
   };
 };
 
 /**
- * Escape/unescape delimiters
+ * Returns a function for escaping and unescaping erb-style template delimiters.
+ *
+ * ```js
+ * var delims = mu.delims();
+ * app.preRender(/\.tmpl$/, delims.escape());
+ * app.postRender(/\.tmpl$/, delims.unescape());
+ * ```
+ * @param {Object} `options`
+ * @api public
  */
 
-exports.delims = function delims(options) {
+exports.delims = function(options) {
   options = options || {};
-  options.escapeString = options.escapeString || '__UTILS_DELIM__';
+  var escapeString = options.escapeString || '__UTILS_DELIM__';
   options.from = options.from || '{%%';
   options.to = options.to || '{%';
-  var res = {};
+  var delims = {};
 
   // escape
-  res.escape = function escape(from) {
+  delims.escape = function(from) {
     from = from || options.from;
-    return function(file, next) {
-      file.content = file.content.split(from).join(options.escapeString);
+    return function(view, next) {
+      view.content = view.content.split(from).join(escapeString);
       next();
     };
   };
 
   // unscape
-  res.unescape = function unescape(to) {
+  delims.unescape = function(to) {
     to = to || options.to;
-    return function(file, next) {
-      file.content = file.content.split(options.escapeString).join(to);
+    return function(view, next) {
+      view.content = view.content.split(escapeString).join(to);
       next();
     };
   };
-  return res;
+  return delims;
 };
+
+/**
+ * Cast `val` to an array
+ */
+
+function arrayify(val) {
+  return val ? (Array.isArray(val) ? val : [val]) : [];
+}
