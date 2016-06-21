@@ -7,67 +7,126 @@
 
 'use strict';
 
-/* deps:mocha */
+require('mocha');
 var assert = require('assert');
-var should = require('should');
+var assemble = require('assemble-core');
 var utils = require('./');
-var Template = require('template');
-var template;
+var app;
 
-describe('utils', function () {
+describe('utils', function() {
   beforeEach(function() {
-    template = new Template();
-    template.engine('*', require('engine-lodash'));
-    template.create('page', 'pages');
+    app = assemble();
+    app.engine('md', require('engine-base'));
+    app.create('page', 'pages');
   });
 
-  describe('.delims():', function () {
-    it('should use escape/unescape delims passed on options:', function (cb) {
+  describe('.series', function() {
+    it('should run an array of middleware:', function(cb) {
+      var count = 0;
+
+      function fn(n) {
+        return function(view, next) {
+          count += n;
+          next();
+        };
+      }
+
+      app.preRender(/\.md$/, utils.series([
+        fn(1),
+        fn(2),
+        fn(1),
+        fn(2)
+      ]));
+
+      app.page('abc.md', {content: 'this is abc'});
+
+      app.render('abc.md', function(err, view) {
+        if (err) return cb(err);
+        assert.equal(count, 6);
+        assert.equal(view.content, 'this is abc');
+        cb();
+      });
+    });
+  });
+
+  describe('.parallel', function() {
+    it('should run an array of middleware:', function(cb) {
+      var count = 0;
+
+      function fn(n) {
+        return function(view, next) {
+          count += n;
+          next();
+        };
+      }
+
+      app.onLoad(/\.md$/, utils.parallel([
+        fn(1),
+        fn(2),
+        fn(1),
+        fn(2)
+      ]));
+
+      app.page('abc.md', {content: 'this is abc'});
+
+      app.render('abc.md', function(err, view) {
+        if (err) return cb(err);
+        assert.equal(count, 6);
+        assert.equal(view.content, 'this is abc');
+        cb();
+      });
+    });
+  });
+
+  describe('.delims', function() {
+    it('should use escape/unescape delims passed on options:', function(cb) {
       var delims = utils.delims({from: '<%%', to: '<%'});
 
-      template.data({bar: 'XYZ'});
-      template.page('abc.md', {content: '<%%= foo %><%= bar %>'});
-      template.preRender(/./, delims.escape());
-      template.postRender(/./, delims.unescape());
+      app.data({bar: 'XYZ'});
+      app.page('abc.md', {content: '<%%= foo %><%= bar %>'});
+      app.preRender(/./, delims.escape());
+      app.postRender(/./, delims.unescape());
 
-      template.render('abc.md', function (err, content) {
-        if (err) console.log(err);
-        content.should.equal('<%= foo %>XYZ');
+      app.render('abc.md', function(err, view) {
+        if (err) return cb(err);
+        assert.equal(view.content, '<%= foo %>XYZ');
         cb();
       });
     });
 
-    it('should use escape/unescape delims passed to methods:', function (cb) {
+    it('should use escape/unescape delims passed to methods:', function(cb) {
       var delims = utils.delims();
 
-      template.data({bar: 'XYZ'});
-      template.page('abc.md', {content: '<%%= foo %><%= bar %>'});
-      template.preRender(/./, delims.escape('<%%'));
-      template.postRender(/./, delims.unescape('<%'));
+      app.data({bar: 'XYZ'});
+      app.page('abc.md', {content: '<%%= foo %><%= bar %>'});
+      app.preRender(/./, delims.escape('<%%'));
+      app.postRender(/./, delims.unescape('<%'));
 
-      template.render('abc.md', function (err, content) {
-        if (err) console.log(err);
-        content.should.equal('<%= foo %>XYZ');
+      app.render('abc.md', function(err, view) {
+        if (err) return cb(err);
+        assert.equal(view.content, '<%= foo %>XYZ');
         cb();
       });
     });
   });
 
-  describe('.handleError():', function () {
-    it('should handle middleware errors:', function (cb) {
-      template.option('router methods', ['onFoo']);
-
-      template.page('abc.md', {content: 'this is content.'});
-      template.postRender(/./, function (file, next) {
-        next();
+  describe('.handleError', function() {
+    it('should handle middleware errors:', function(cb) {
+      app.handler('custom');
+      app.page('abc.md', {content: 'this is content.'});
+      app.custom(/./, function(file, next) {
+        next(new Error('foo'));
       });
 
-      var file = template.getPage('abc.md');
-      template.render(file, function (err, content) {
-        if (err) console.log(err);
-        file.content = content;
-        template.handle('postRender', file, utils.handleError(file, 'foo'));
-        cb();
+      app.render('abc.md', function(err, view) {
+        if (err) return cb(err);
+
+        app.handle('custom', view, utils.handleError(view, 'custom', function(err) {
+          assert.equal(err.method, 'custom');
+          assert(err.view);
+          assert.equal(err.view.basename, 'abc.md');
+          cb();
+        }));
       });
     });
   });
