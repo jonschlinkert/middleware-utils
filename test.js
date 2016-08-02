@@ -9,13 +9,13 @@
 
 require('mocha');
 var assert = require('assert');
-var assemble = require('assemble-core');
+var templates = require('templates');
 var utils = require('./');
 var app;
 
 describe('utils', function() {
   beforeEach(function() {
-    app = assemble();
+    app = templates();
     app.engine('md', require('engine-base'));
     app.create('page', 'pages');
   });
@@ -40,6 +40,7 @@ describe('utils', function() {
 
       app.page('abc.md', {content: 'this is abc'}, function(err, page) {
         if (err) return cb(err);
+        assert.equal(count, 6);
         cb();
       });
     });
