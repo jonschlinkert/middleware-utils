@@ -8,7 +8,7 @@
 'use strict';
 
 var each = require('async-each');
-var eachSeries = require('async-each-series');
+var reduce = require('async-array-reduce');
 
 /**
  * Run one or more middleware in series.
@@ -36,13 +36,20 @@ var eachSeries = require('async-each-series');
 exports.series = function(fns) {
   fns = arrayify.apply(null, arguments);
   return function(view, cb) {
-    eachSeries(fns, function(fn, next) {
+    reduce(fns, view, function(file, fn, next) {
+      // ensure errors are handled
       try {
-        fn(view, next);
+        fn(file, function(err) {
+          if (err) return next(err);
+          next(null, file);
+        });
       } catch (err) {
         next(err);
       }
-    }, cb);
+    }, function(err) {
+      if (err) return cb(err);
+      cb(null, view);
+    });
   };
 };
 
@@ -74,11 +81,17 @@ exports.parallel = function(fns) {
   return function(file, cb) {
     each(fns, function(fn, next) {
       try {
-        fn(file, next);
+        fn(file, function(err) {
+          if (err) return next(err);
+          next(null, file);
+        });
       } catch (err) {
         next(err);
       }
-    }, cb);
+    }, function(err) {
+      if (err) return cb(err);
+      cb(null, file);
+    });
   };
 };
 

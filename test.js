@@ -21,7 +21,30 @@ describe('utils', function() {
   });
 
   describe('.series', function() {
-    it('should run an array of middleware:', function(cb) {
+    it('should run an array of onLoad middleware:', function(cb) {
+      var count = 0;
+
+      function fn(n) {
+        return function(view, next) {
+          count += n;
+          next();
+        };
+      }
+
+      app.onLoad(/\.md$/, utils.series([
+        fn(1),
+        fn(2),
+        fn(1),
+        fn(2)
+      ]));
+
+      app.page('abc.md', {content: 'this is abc'}, function(err, page) {
+        if (err) return cb(err);
+        cb();
+      });
+    });
+
+    it('should run an array of preRender middleware:', function(cb) {
       var count = 0;
 
       function fn(n) {
@@ -51,27 +74,25 @@ describe('utils', function() {
 
   describe('.parallel', function() {
     it('should run an array of middleware:', function(cb) {
-      var count = 0;
-
-      function fn(n) {
+      function fn(str, n) {
         return function(view, next) {
-          count += n;
+          view.val += str;
           next();
         };
       }
 
       app.onLoad(/\.md$/, utils.parallel([
-        fn(1),
-        fn(2),
-        fn(1),
-        fn(2)
+        fn('a'),
+        fn('b'),
+        fn('c'),
+        fn('d')
       ]));
 
-      app.page('abc.md', {content: 'this is abc'});
+      app.page('abc.md', {content: 'this is abc', val: ''});
 
       app.render('abc.md', function(err, view) {
         if (err) return cb(err);
-        assert.equal(count, 6);
+        assert.equal(view.val, 'abcd');
         assert.equal(view.content, 'this is abc');
         cb();
       });
@@ -101,6 +122,36 @@ describe('utils', function() {
       app.page('abc.md', {content: '<%%= foo %><%= bar %>'});
       app.preRender(/./, delims.escape('<%%'));
       app.postRender(/./, delims.unescape('<%'));
+
+      app.render('abc.md', function(err, view) {
+        if (err) return cb(err);
+        assert.equal(view.content, '<%= foo %>XYZ');
+        cb();
+      });
+    });
+
+    it('should work with series:', function(cb) {
+      var delims = utils.delims();
+
+      app.data({bar: 'XYZ'});
+      app.page('abc.md', {content: '<%%= foo %><%= bar %>'});
+      app.preRender(/./, utils.series([delims.escape('<%%')]));
+      app.postRender(/./, utils.series([delims.unescape('<%')]));
+
+      app.render('abc.md', function(err, view) {
+        if (err) return cb(err);
+        assert.equal(view.content, '<%= foo %>XYZ');
+        cb();
+      });
+    });
+
+    it('should work with parallel:', function(cb) {
+      var delims = utils.delims();
+
+      app.data({bar: 'XYZ'});
+      app.page('abc.md', {content: '<%%= foo %><%= bar %>'});
+      app.preRender(/./, utils.parallel([delims.escape('<%%')]));
+      app.postRender(/./, utils.parallel([delims.unescape('<%')]));
 
       app.render('abc.md', function(err, view) {
         if (err) return cb(err);
