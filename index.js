@@ -1,8 +1,8 @@
 /*!
  * middleware-utils <https://github.com/jonschlinkert/middleware-utils>
  *
- * Copyright (c) 2015, Jon Schlinkert.
- * Licensed under the MIT License.
+ * Copyright (c) 2015-2017, Jon Schlinkert.
+ * Released under the MIT License.
  */
 
 'use strict';
@@ -33,23 +33,16 @@ var reduce = require('async-array-reduce');
  * @api public
  */
 
-exports.series = function(fns) {
-  fns = arrayify.apply(null, arguments);
-  return function(view, cb) {
-    reduce(fns, view, function(file, fn, next) {
-      // ensure errors are handled
+exports.series = function(/* middleware fns */) {
+  var fns = [].concat.apply([], arguments);
+  return (view, cb) => {
+    reduce(fns, view, (acc, fn, next) => {
       try {
-        fn(file, function(err) {
-          if (err) return next(err);
-          next(null, file);
-        });
+        fn(acc, handle(acc, next));
       } catch (err) {
         next(err);
       }
-    }, function(err) {
-      if (err) return cb(err);
-      cb(null, view);
-    });
+    }, handle(view, cb));
   };
 };
 
@@ -76,22 +69,16 @@ exports.series = function(fns) {
  * @api public
  */
 
-exports.parallel = function(fns) {
-  fns = arrayify.apply(null, arguments);
-  return function(file, cb) {
-    each(fns, function(fn, next) {
+exports.parallel = function(/* middleware fns */) {
+  var fns = [].concat.apply([], arguments);
+  return (view, cb) => {
+    each(fns, (fn, next) => {
       try {
-        fn(file, function(err) {
-          if (err) return next(err);
-          next(null, file);
-        });
+        fn(view, handle(view, next));
       } catch (err) {
         next(err);
       }
-    }, function(err) {
-      if (err) return cb(err);
-      cb(null, file);
-    });
+    }, handle(view, cb));
   };
 };
 
@@ -111,10 +98,12 @@ exports.parallel = function(fns) {
  */
 
 exports.error = function(method) {
-  return function(err, view, next) {
-    next = next || function() {
-      if (err) throw err;
-    };
+  return (err, view, next) => {
+    if (typeof next !== 'function') {
+      next = (err) => {
+        if (err) throw err;
+      };
+    }
 
     if (err) {
       err.method = method;
@@ -122,7 +111,8 @@ exports.error = function(method) {
       next(err);
       return;
     }
-    next();
+
+    next(null, view);
   };
 };
 
@@ -140,18 +130,9 @@ exports.error = function(method) {
  */
 
 exports.handleError = function(view, method, next) {
-  return function(err) {
-    next = next || function() {
-      if (err) throw err;
-    };
-
-    if (err) {
-      err.method = method;
-      err.view = view;
-      next(err);
-      return;
-    }
-    next();
+  var handle = exports.error(method);
+  return (err) => {
+    handle(err, view, next);
   };
 };
 
@@ -172,32 +153,32 @@ exports.delims = function(options) {
   var escapeString = options.escapeString || '__UTILS_DELIM__';
   options.from = options.from || '{%%';
   options.to = options.to || '{%';
-  var delims = {};
+  var memo = {};
 
   // escape
-  delims.escape = function(from) {
+  memo.escape = (from) => {
     from = from || options.from;
-    return function(view, next) {
+    return (view, next) => {
       view.content = view.content.split(from).join(escapeString);
-      next();
+      next(null, view);
     };
   };
 
   // unscape
-  delims.unescape = function(to) {
+  memo.unescape = (to) => {
     to = to || options.to;
-    return function(view, next) {
+    return (view, next) => {
       view.content = view.content.split(escapeString).join(to);
-      next();
+      next(null, view);
     };
   };
-  return delims;
+  return memo;
 };
 
 /**
- * Cast `val` to an array
+ * Ensure file is returned in callback
  */
 
-function arrayify(val) {
-  return val ? (Array.isArray(val) ? val : [val]) : [];
+function handle(file, next) {
+  return (err) => next(err, file);
 }

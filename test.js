@@ -1,7 +1,6 @@
 /*!
  * middleware-utils <https://github.com/jonschlinkert/middleware-utils>
- *
- * Copyright (c) 2015 Jon Schlinkert.
+ * Copyright (c) 2015-2017 Jon Schlinkert.
  * Licensed under the MIT license.
  */
 
@@ -146,6 +145,20 @@ describe('utils', function() {
       });
     });
 
+    it('should catch thrown errors with series:', function(cb) {
+      app.data({bar: 'XYZ'});
+      app.page('abc.md', {content: 'this is content'});
+      app.preRender(/./, utils.series(function(file, next) {
+        throw new Error('foo');
+      }));
+
+      app.render('abc.md', function(err, view) {
+        assert(err);
+        assert.equal(err.message, 'foo');
+        cb();
+      });
+    });
+
     it('should work with parallel:', function(cb) {
       var delims = utils.delims();
 
@@ -157,6 +170,20 @@ describe('utils', function() {
       app.render('abc.md', function(err, view) {
         if (err) return cb(err);
         assert.equal(view.content, '<%= foo %>XYZ');
+        cb();
+      });
+    });
+
+    it('should catch thrown errors with parallel:', function(cb) {
+      app.data({bar: 'XYZ'});
+      app.page('abc.md', {content: 'this is content'});
+      app.preRender(/./, utils.parallel(function(file, next) {
+        throw new Error('foo');
+      }));
+
+      app.render('abc.md', function(err, view) {
+        assert(err);
+        assert.equal(err.message, 'foo');
         cb();
       });
     });
@@ -179,6 +206,67 @@ describe('utils', function() {
           assert.equal(err.view.basename, 'abc.md');
           cb();
         }));
+      });
+    });
+  });
+
+  describe('.error', function() {
+    it('should handle middleware errors:', function(cb) {
+      app.handler('custom');
+      app.page('abc.md', {content: 'this is content.'});
+      app.custom(/./, function(file, next) {
+        next(new Error('foo'));
+      });
+
+      app.render('abc.md', function(err, view) {
+        if (err) return cb(err);
+
+        app.handle('custom', view, function(err) {
+          utils.error('custom')(err, view, function(err) {
+            assert.equal(err.method, 'custom');
+            assert(err.view);
+            assert.equal(err.view.basename, 'abc.md');
+            cb();
+          });
+        });
+      });
+    });
+
+    it('should throw when no callback is passed', function(cb) {
+      app.handler('custom');
+      app.page('abc.md', {content: 'this is content.'});
+      app.custom(/./, function(file, next) {
+        next(new Error('foo'));
+      });
+
+      app.render('abc.md', function(err, view) {
+        if (err) return cb(err);
+
+        app.handle('custom', view, function(err) {
+          assert.throws(function() {
+            utils.error('custom')(err, view);
+          });
+          cb();
+        });
+      });
+    });
+
+    it('should call the callback if no error exists', function(cb) {
+      app.handler('custom');
+      app.page('abc.md', {content: 'this is content.'});
+      app.custom(/./, function(file, next) {
+        next(null, file);
+      });
+
+      app.render('abc.md', function(err, view) {
+        if (err) return cb(err);
+
+        app.handle('custom', view, function(err) {
+          utils.error('custom')(err, view, function(err) {
+            assert(!err);
+            cb();
+          });
+        });
       });
     });
   });
